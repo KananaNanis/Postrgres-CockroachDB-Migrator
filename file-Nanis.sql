@@ -1,0 +1,1 @@
+    installed_rank integer [PRIMARY KEY (id);, PRIMARY KEY (id);, PRIMARY KEY (installed_rank);, PRIMARY KEY (id);]

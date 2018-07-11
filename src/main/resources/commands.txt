@@ -1,0 +1,42 @@
+postgres://root@servername:26257/mydb?sslmode=disable
+
+postgres://root@developme-external-x6l61qt22wdm-1961897715.us-east-1.elb.amazonaws.com:26257/songa_billing_parent_dev?sslmode=disable
+
+postgres://root@developme-external-x6l61qt22wdm-1961897715.us-east-1.elb.amazonaws.com:26257/ral_payments_dev?sslmode=disable
+
+cockroach sql --host=developme-external-x6l61qt22wdm-1961897715.us-east-1.elb.amazonaws.com --port=26257 --insecure
+
+
+psql -h rag-stage.cxt1hwro0vuh.eu-west-1.rds.amazonaws.com -p 5432 -u songa_songa -p
+psql -h rag-stage.cxt1hwro0vuh.eu-west-1.rds.amazonaws.com -p 5432 -U songa_songa -p
+psql -h rag-stage.cxt1hwro0vuh.eu-west-1.rds.amazonaws.com -P 5432 -U songa_songa -p
+psql -h rag-stage.cxt1hwro0vuh.eu-west-1.rds.amazonaws.com -P 5432 -U songa_songa -W
+
+psql -h rag-stage.cxt1hwro0vuh.eu-west-1.rds.amazonaws.com --port 5432 -U songa_songa -W
+
+pg_dump -h rag-stage.cxt1hwro0vuh.eu-west-1.rds.amazonaws.com --port 5432 -U songa_songa -d songa_billing_parent_dev -W  > songa_billing_parent_dev.sql
+
+psql -p 26257 -h developme-external-x6l61qt22wdm-1961897715.us-east-1.elb.amazonaws.com -d songa_billing_parent_dev -U root < songa_billing_parent_dev.sql
+
+pg_dump -h rag-stage.cxt1hwro0vuh.eu-west-1.rds.amazonaws.com --port 5432 -U songa_songa -d ral_payments_dev -W  > ral_payments_dev.sql
+
+cockroach sql --host=developme-external-x6l61qt22wdm-1961897715.us-east-1.elb.amazonaws.com --port=26257 --insecure
+
+psql -p 26257 -h developme-external-x6l61qt22wdm-1961897715.us-east-1.elb.amazonaws.com -d ral_payments_dev -U root < ral_payments_dev.sql
+
+docker stack deploy --with-registry-auth -c docker-stack.yml staging-roach
+
+psql -p 26257 -h developme-external-x6l61qt22wdm-1961897715.us-east-1.elb.amazonaws.com -d songa_billing_parent_dev -U root < songa_billing_parent_dev.sql
+
+psql -p 26257 -h developme-external-x6l61qt22wdm-1961897715.us-east-1.elb.amazonaws.com -d ral_payments_dev -U root < ral_payments_dev.sql
+
+./gradlew -i -Dflyway.url=jdbc:postgresql://"${BB_DEV_DATABASE_URL}":26257/"${BB_DEV_DATABASE}"?sslmode=disable -Dflyway.user="${BB_DEV_USER}" -Dflyway.password="${BB_DEV_PASS}" -PragNexusUsername="${NEXUS_USER}" -PragNexusPassword="${NEXUS_PASS}" --daemon --configure-on-demand  --parallel flywayMigrate
+
+export NEXUS_USER=deployment 
+export NEXUS_PASS=VP9VtWC85B4nH7wN 
+export BB_DEV_DATABASE_URL=developme-external-x6l61qt22wdm-1961897715.us-east-1.elb.amazonaws.com
+export BB_DEV_DATABASE=songa_billing_parent_dev 
+export BB_DEV_USER=root
+export BB_DEV_PASS=gm58#uc50M96
+
+jdbc:postgresql://developme-external-x6l61qt22wdm-1961897715.us-east-1.elb.amazonaws.com:26257/songa_billing_parent_dev?sslmode=disable

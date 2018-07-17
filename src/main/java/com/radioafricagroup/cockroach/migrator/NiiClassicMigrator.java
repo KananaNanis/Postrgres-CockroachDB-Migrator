@@ -56,13 +56,16 @@ public class NiiClassicMigrator {
     System.out.println("Start: " + start);
     System.out.println("End: " + end);
 
-    return input.substring(start, end);
+    //return input.substring(start, end);
+    return null;
   }
   private HashMap<String, String> getAllPK() {
 
+return null;
   }
 
   public void fillOutHashMaps() {
+
 
   }
   public void replacePKIntoCreateDDL() {
@@ -76,7 +79,7 @@ public class NiiClassicMigrator {
     String fileContents = niiClassicMigrator.readOriginalFile(filePath);
     //System.out.println(fileContents);
 
-    String firstCreateDDLStatement = niiClassicMigrator.getCreateStatement(fileContents);
-    System.out.println(firstCreateDDLStatement);
+    //String firstCreateDDLStatement = niiClassicMigrator.getCreateStatement(fileContents);
+    //System.out.println(firstCreateDDLStatement);
   }
 }

@@ -1,7 +1,11 @@
 package com.radioafricagroup.cockroach.migrator;
+
 import java.io.*;
 import java.net.URISyntaxException;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 public class ClassicMigrator {
     /*
         0. getAllTableNames() - this forms the basis of our loops
@@ -12,13 +16,20 @@ public class ClassicMigrator {
      */
     private HashMap<String, String> tableMap = new HashMap<String, String>();
     private HashMap<String, String> createMap = new HashMap<String, String>();
-    private HashMap<String, String> primaryKeyMap = new HashMap<String, String>();
+    private HashMap<String, String> ddlMap = new HashMap<String, String>();
+    private HashMap<String, String> pryKeysmap = new HashMap<String, String>();
+    private HashMap<String, String> tableNames = new HashMap<String, String>();
     private String line;
+    private String newContent = "";
+    private String currentContent = "";
+    private String fullContent = "";
     Scanner scanner;
     static ClassLoader classLoader = ClassicMigrator.class.getClassLoader();
     static File file;
-    private String oldContent;
-    FileWriter writer=null;
+    private String oldContent = "";
+    private static BufferedReader reader;
+    FileWriter writer = null;
+
     static {
         try {
             file = new File(classLoader.getResource("songa_billing_parent_dev_original.sql").toURI());
@@ -26,145 +37,224 @@ public class ClassicMigrator {
             e.printStackTrace();
         }
     }
-    // this is always good practice
-    public ClassicMigrator(){}
 
-    private HashMap<String, String> getAllTableNames(File file) throws FileNotFoundException {
-        scanner= new Scanner(file);
-        line = scanner.nextLine();
-        while(scanner.hasNextLine()){
-            line=scanner.nextLine();
-            //System.out.println(line);
-            if(line.startsWith("ALTER") ){
-                String[] names = line.split(" ");
-                names = Arrays.copyOfRange(names, names.length-1, names.length);
-                for(String name:names){
-                    if(name.contains(".")) {
-                        tableMap.put(name, "");
-                    }
-                }
-            }
-        }
-        return tableMap;
+    // this is always good practice
+    public ClassicMigrator() {
     }
+
+
+
     private HashMap<String, String> extractFullCreateStatements(File file) throws FileNotFoundException {
-        scanner= new Scanner(file);
-        scanner=scanner.useDelimiter(";");
-        while(scanner.hasNextLine()){
+        scanner = new Scanner(file);
+        scanner = scanner.useDelimiter(";");
+        while (scanner.hasNextLine()) {
             line = scanner.nextLine();
-            if(line.startsWith("CREATE TABLE")){
+            if (line.startsWith("CREATE TABLE")) {
                 String[] gettableName = line.split(" ");
-                gettableName = Arrays.copyOfRange(gettableName, gettableName.length-2, gettableName.length-1);
-                for(String tableName:gettableName){
-                    line = scanner.nextLine();
-                    String[] getNotNull = line.split(" ");
-                    getNotNull= Arrays.copyOfRange(getNotNull, getNotNull.length-2, getNotNull.length);
-                    List<String> strList2 = Arrays.asList(getNotNull);
-                    String notNull = String.join(" ",strList2);
-                    createMap.put(tableName,notNull);
-                    //System.out.println(notNull);
-                }
+                gettableName = Arrays.copyOfRange(gettableName, gettableName.length - 2, gettableName.length - 1);
+                //for (String tblName:gettableName) {
+                List<String> strList2 = Arrays.asList(gettableName);
+                String tblName = String.join(" ", strList2);
+                createMap.put(tblName, "");
+
             }
         }
+
         return createMap;
     }
-    private HashMap<String, String> extractPrimaryKeys(File file) throws FileNotFoundException {
-        getAllTableNames(file);
-        scanner= new Scanner(file);
-        while(scanner.hasNextLine()){
-            line=scanner.nextLine();
-            if(line.startsWith("ALTER") ) {
+
+    private HashMap<String, String> extractUnique(File file) throws FileNotFoundException {
+        //getAllTableNames(file);
+        scanner = new Scanner(file);
+        while (scanner.hasNextLine()) {
+            line = scanner.nextLine();
+            if (line.startsWith("ALTER")) {
                 String[] names = line.split(" ");
                 names = Arrays.copyOfRange(names, names.length - 1, names.length);
                 for (String name : names) {
                     if (name.contains(".")) {
-                    line = scanner.nextLine();
-                    if (line.contains("ADD CONSTRAINT")) {
-                        String[] getKey = line.split(" ");
-                        if (line.contains("PRIMARY")) {
-                            getKey = Arrays.copyOfRange(getKey, getKey.length - 3, getKey.length-1);
-                        } if (line.contains("UNIQUE")) {
-                            getKey = Arrays.copyOfRange(getKey, getKey.length - 2, getKey.length);
+                        line = scanner.nextLine();
+                        if (line.contains("ADD CONSTRAINT")) {
+                            String[] getUniq = line.split(" ");
+                            /*if (line.contains("PRIMARY")) {
+                                getKey = Arrays.copyOfRange(getKey, getKey.length - 3, getKey.length-1);
+                            }*/
+                            if (line.contains("UNIQUE")) {
+                                // System.out.println(line);
+                                getUniq = Arrays.copyOfRange(getUniq, getUniq.length - 1, getUniq.length);
+
+                                List<String> strList = Arrays.asList(getUniq);
+                                String unique = String.join(" ", strList);
+                                //System.out.println(key);
+                                tableMap.put(unique, "");
+                                //System.out.println(tableMap.keySet());
+                            }
                         }
-                        List<String> strList = Arrays.asList(getKey);
-                        String key = String.join(" ", strList);
-                        //System.out.println(key);
-                        tableMap.put(name,key);
                     }
                 }
             }
-                }
-            }
+
+        }
         return tableMap;
     }
-    public String assembleCreateStatement(File file) throws IOException{
-        extractPrimaryKeys(file);
-        extractFullCreateStatements(file);
+
+    private HashMap<String, String> extractPrimaryKeys(File file) throws FileNotFoundException {
+        //getAllTableNames(file);
         scanner = new Scanner(file);
-        String newValue;
-        String[] stringKeys = new String[createMap.keySet().size()];
-        createMap.keySet().toArray(stringKeys);
-        writer = new FileWriter("writeTo.sql");
-        for (String key : stringKeys) {
-            String replaceValue = createMap.get(key);
-            String pryKey = tableMap.get(key);
-            while (scanner.hasNextLine()) {
-                line = scanner.nextLine();
-                oldContent = oldContent + line + System.lineSeparator();
-                if (oldContent.contains("CREATE TABLE")) {
-                    oldContent = scanner.nextLine();
-                    oldContent = oldContent.replace(replaceValue,pryKey);
-                    System.out.println(oldContent);
-                    writer.write(oldContent+"\n");
+        while (scanner.hasNextLine()) {
+            line = scanner.nextLine();
+            if (line.startsWith("ALTER")) {
+                String[] names = line.split(" ");
+                names = Arrays.copyOfRange(names, names.length - 1, names.length);
+                for (String name : names) {
+                    if (name.contains(".")) {
+                        line = scanner.nextLine();
+                        if (line.contains("ADD CONSTRAINT")) {
+                            String[] getKey = line.split(" ");
+                            if (line.contains("PRIMARY")) {
+                                getKey = Arrays.copyOfRange(getKey, getKey.length - 1, getKey.length);
+
+                                List<String> strList = Arrays.asList(getKey);
+                                String key = String.join(" ", strList);
+                                //System.out.println(key);
+                                pryKeysmap.put(name, key);
+                                //System.out.println(pryKeysmap.values());
+                            }
+                        }
+                    }
                 }
             }
+
         }
-            writer.flush();
-            writer.close();
-            return null;
-        /*String[] tableName = oldContent.split(" ");
-        tableName = Arrays.copyOfRange(tableName, tableName.length - 2, tableName.length);
-        List<String> strList3 = Arrays.asList(tableName);
-        newValue = String.join(" ", strList3);*/
+        return pryKeysmap;
     }
 
-    public String  assembleCompleteFile(File file) throws IOException, URISyntaxException {
-        //assembleCreateStatement();
-        scanner= new Scanner(file);
-        while(scanner.hasNextLine()) {
+    private HashMap<String, String> getCreateStatement(File file) throws IOException {
+        String startLine = "CREATE TABLE";
+        String endLine = ");";
+        String copyStart = "COPY";
+        String copyEnd = "\\.";
+        scanner = new Scanner(file);
+        while (scanner.hasNextLine()) {
             line = scanner.nextLine();
             oldContent = oldContent + line + System.lineSeparator();
-
-                if (line.contains("public") || line.contains("uuid")) {
-                    String[] words = line.split(" ");
-                    for (String newContent : words) {
-                        if (newContent.equals("public")) {
-                            newContent = oldContent.replace("public", "songa_cockroachdb");
-                            writer = new FileWriter("writeFile.sql");
-                            writer.write(newContent);
-                            //System.out.println(newContent);
-                        }
-                        if (newContent.contains("uuid_generate_v4()")) {
-                            newContent = newContent.replace("songa_cockroachdb.uuid_generate_v4()",
-                                    "gen_random_uuid()");
-                            writer = new FileWriter("writeFile.sql");
-                            writer.write(newContent);
-                            System.out.println(newContent);
-                        }
-                }
+            String pattern = String.format("(%s).*?(%s)", Pattern.quote(startLine), Pattern.quote(endLine));
+            Matcher m = Pattern.compile(pattern, Pattern.DOTALL).matcher(oldContent);
+            writer = new FileWriter("writeDDL.sql");
+            while (m.find()) {
+                writer.write(m.group() + "\n");
+                ddlMap.put(m.group(), "");
+                //System.out.println(ddlMap.keySet());
             }
+            String pattern2 = String.format("(%s).*?(%s)", Pattern.quote(copyStart), Pattern.quote(copyEnd));
+            Matcher m2 = Pattern.compile(pattern2, Pattern.DOTALL).matcher(oldContent);
+            while (m2.find()) {
+                writer.write(m2.group() + "\n");
+            }
+
         }
-                writer.flush();
-                return null;
+        writer.close();
+        return ddlMap;
+    }
+
+    public String replacePrimaryKey(BufferedReader reader) throws IOException, URISyntaxException {
+        extractFullCreateStatements(file);
+        extractPrimaryKeys(file);
+        reader = new BufferedReader(new FileReader("writeDDL.sql"));
+        scanner = new Scanner(reader);
+        while (scanner.hasNextLine()) {
+            line = scanner.nextLine();
+            writer = new FileWriter("writePryKeys.sql");
+            newContent = newContent + line + System.lineSeparator();
+
+            String createtblNm = createMap.keySet().toString();
+            String newName = createtblNm.replace("[", "").replace("]", "");
+
+            String altertblNm = pryKeysmap.keySet().toString();
+            String newNm = altertblNm.replace("[", "").replace("]", "");
+
+            for (String val : pryKeysmap.values()) {
+                String newKey = val.replace("(", "").
+                        replace(");", "");
+                //replace("(", "").replace("]", "");
+                //System.out.println(newKey);
+                if (newName.equals(newNm)) {
+                    if (line.contains("CREATE TABLE")) {
+                        line = scanner.nextLine();
+                        if (line.contains(newKey) || line.contains("installed_rank")) {
+                            newContent = newContent + line.replace("NOT NULL", "PRIMARY KEY");
+                        }
+                    }
+
+                }
+
+            }
+            writer.write(newContent);
+        }
+        writer.close();
+        return null;
+    }
+
+    public String assembleCompleteFile(BufferedReader reader) throws IOException, URISyntaxException {
+        reader = new BufferedReader(new FileReader("writePryKeys.sql"));
+        scanner = new Scanner(reader);
+
+        while (scanner.hasNextLine()) {
+            line = scanner.nextLine();
+            writer = new FileWriter("writeFile.sql");
+            currentContent = currentContent + line + System.lineSeparator();
+            if (currentContent.contains("public")) {
+                currentContent = currentContent.replace("public", "songa_cockroachdb");
             }
 
-        public static void main(String[] args) throws IOException, URISyntaxException {
+            if (currentContent.contains("uuid_generate_v4()")) {
+                currentContent = currentContent.replace("songa_cockroachdb.uuid_generate_v4()",
+                        "gen_random_uuid()");
+            }
+            writer.write(currentContent + "\n");
+        }
+        writer.close();
+        return null;
+    }
+
+    public String uniqueReplace(BufferedReader reader) throws IOException {
+        extractUnique(file);
+        reader = new BufferedReader(new FileReader("writeFile.sql"));
+        scanner = new Scanner(reader);
+        List<String> results = new ArrayList<String>();
+        while (scanner.hasNextLine()) {
+            line = scanner.nextLine();
+            //line = scanner.nextLine();
+            writer = new FileWriter("writeUniqueReplace.sql");
+            fullContent = fullContent + line + System.lineSeparator();
+            String uniq = tableMap.keySet().toString();
+            String text = uniq.replace("[(", "").replace(");]", "");
+            if (line.contains(text)) {
+                line = line.replace("NOT NULL", "UNIQUE");
+
+            }
+            results.add(line);
+            String listString = "";
+            for (String s : results) {
+                listString += s + "\n";
+            }
+            writer.write(listString);
+            System.out.println();
+        }
+        writer.close();
+        return fullContent;
+    }
+
+    public static void main(String[] args) throws IOException, URISyntaxException {
         ClassicMigrator migrator = new ClassicMigrator();
-        //System.out.println(migrator.getAllTableNames(file));
         migrator.extractFullCreateStatements(file);
-        //System.out.println(migrator.extractPrimaryKeys(file));
-        //migrator.assembleCompleteFile(file);
-          //migrator.assembleCreateStatement(file);
-          //migrator.createFile(file);
+        migrator.extractUnique(file);
+        migrator.extractPrimaryKeys(file);
+        migrator.getCreateStatement(file);
+        migrator.replacePrimaryKey(reader);
+        migrator.assembleCompleteFile(reader);
+        migrator.uniqueReplace(reader);
     }
 }
+
+
